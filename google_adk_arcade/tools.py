@@ -1,25 +1,24 @@
-from typing import Any, Dict
-from typing_extensions import override
+from typing import Any
+
 from arcadepy import AsyncArcade
 from arcadepy.types import ToolDefinition
-from arcade_adk._utils import (
-    _get_arcade_tool_formats,
-    tool_definition_to_pydantic_model,
-    get_arcade_client,
-)
-from arcade_adk.errors import AuthorizationError, ToolError
-from google.adk.tools import (ToolContext, FunctionTool)
+from google.adk.tools import FunctionTool, ToolContext
+
 # TODO: This relies on "private" functions for schema adherence, update when
 # stable for Google
-from google.adk.tools._automatic_function_calling_util import (
-    _map_pydantic_type_to_property_schema
-)
+from google.adk.tools._automatic_function_calling_util import _map_pydantic_type_to_property_schema
 from google.genai import types
+from typing_extensions import override
+
+from google_adk_arcade._utils import (
+    _get_arcade_tool_formats,
+    get_arcade_client,
+    tool_definition_to_pydantic_model,
+)
+from google_adk_arcade.errors import AuthorizationError, ToolError
 
 
-async def _authorize_tool(client: AsyncArcade,
-                          tool_context: ToolContext,
-                          tool_name: str):
+async def _authorize_tool(client: AsyncArcade, tool_context: ToolContext, tool_name: str):
     if not tool_context.state.get("user_id"):
         raise ValueError("No user ID and authorization required for tool")
 
@@ -33,11 +32,11 @@ async def _authorize_tool(client: AsyncArcade,
 
 async def _async_invoke_arcade_tool(
     tool_context: ToolContext,
-    tool_args: Dict,
+    tool_args: dict,
     tool_name: str,
     requires_auth: bool,
     client: AsyncArcade,
-) -> Dict:
+) -> dict:
     if requires_auth:
         await _authorize_tool(client, tool_context, tool_name)
 
@@ -54,23 +53,24 @@ async def _async_invoke_arcade_tool(
 
 
 class ArcadeTool(FunctionTool):
-    def __init__(self,
-                 name: str,
-                 description: str,
-                 schema: ToolDefinition,
-                 client: AsyncArcade,
-                 requires_auth: bool):
-
+    def __init__(
+        self,
+        name: str,
+        description: str,
+        schema: ToolDefinition,
+        client: AsyncArcade,
+        requires_auth: bool,
+    ):
         # define callable
-        async def func(tool_context: ToolContext,
-                       **kwargs: Any) -> Dict:
+        async def func(tool_context: ToolContext, **kwargs: Any) -> dict:
             return await _async_invoke_arcade_tool(
                 tool_context=tool_context,
                 tool_args=kwargs,
                 tool_name=name,
                 requires_auth=requires_auth,
-                client=client
+                client=client,
             )
+
         func.__name__ = name.lower()
         func.__doc__ = description
 
@@ -87,7 +87,7 @@ class ArcadeTool(FunctionTool):
     def _get_declaration(self) -> types.FunctionDeclaration:
         return types.FunctionDeclaration(
             parameters=types.Schema(
-                type='OBJECT',
+                type="OBJECT",
                 properties=self.schema["properties"],
             ),
             description=self.description,
@@ -122,15 +122,12 @@ async def get_arcade_tools(
 
     if not tools and not toolkits:
         if raise_on_empty:
-            raise ValueError(
-                "No tools or toolkits provided to retrieve tool definitions")
+            raise ValueError("No tools or toolkits provided to retrieve tool definitions")
         return {}
 
     tool_formats = await _get_arcade_tool_formats(
-        client,
-        tools=tools,
-        toolkits=toolkits,
-        raise_on_empty=raise_on_empty)
+        client, tools=tools, toolkits=toolkits, raise_on_empty=raise_on_empty
+    )
 
     tool_functions = []
     for tool in tool_formats:
@@ -140,7 +137,7 @@ async def get_arcade_tools(
             description=tool.description,
             schema=tool_definition_to_pydantic_model(tool),
             requires_auth=requires_auth,
-            client=client
+            client=client,
         )
         tool_functions.append(tool_function)
 

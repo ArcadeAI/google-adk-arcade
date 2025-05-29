@@ -1,10 +1,10 @@
 import asyncio
 import os
 from typing import Any
+
 from arcadepy import AsyncArcade
 from arcadepy.types import ToolDefinition
 from pydantic import BaseModel, Field, create_model
-
 
 # Mapping of Arcade value types to Python types
 TYPE_MAPPING = {
@@ -58,7 +58,7 @@ def tool_definition_to_pydantic_model(tool_def: ToolDefinition) -> type[BaseMode
     except ValueError as e:
         raise ValueError(
             f"Error converting {tool_def.name} parameters into pydantic model: {e}"
-        )
+        ) from e
 
 
 def get_arcade_client(
@@ -95,15 +95,13 @@ async def _get_arcade_tool_formats(
     """
     if not tools and not toolkits:
         if raise_on_empty:
-            raise ValueError(
-                "No tools or toolkits provided to retrieve tool definitions")
+            raise ValueError("No tools or toolkits provided to retrieve tool definitions")
         return {}
 
     all_tool_formats: list[ToolDefinition] = []
     # Retrieve individual tools if specified
     if tools:
-        tasks = [client.tools.get(name=tool_id)
-                 for tool_id in tools]
+        tasks = [client.tools.get(name=tool_id) for tool_id in tools]
         responses = await asyncio.gather(*tasks)
         for response in responses:
             all_tool_formats.append(response)
@@ -112,8 +110,7 @@ async def _get_arcade_tool_formats(
     if toolkits:
         # Create a task for each toolkit to fetch its
         # tool definitions concurrently.
-        tasks = [client.tools.list(toolkit=tk)
-                 for tk in toolkits]
+        tasks = [client.tools.list(toolkit=tk) for tk in toolkits]
         responses = await asyncio.gather(*tasks)
 
         # Combine the tool definitions from each response.
