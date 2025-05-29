@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  test-and-publish:
+  test-and-build:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -35,15 +35,51 @@ jobs:
           VERSION=$(grep -m1 '^version' pyproject.toml | cut -d\" -f2)
           echo "VERSION=$VERSION" >> $GITHUB_ENV
 
-      - name: Publish to PyPI
-        id: publish
+      - name: Build release distributions
         working-directory: .
         run: |
           uv build | tee build.log
-          uv publish --token ${{ secrets.PYPI_TOKEN }}
+
+      - name: Upload release distributions
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-dists
+          path: dist/
+
+  pypi-publish:
+    runs-on: ubuntu-latest
+    needs:
+      - test-and-build
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Retrieve release distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: release-dists
+          path: dist/
+
+      - name: Publish release distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f
+
+  notify-slack:
+    runs-on: ubuntu-latest
+    needs:
+      - test-and-build
+      - pypi-publish
+    if: always()
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set version
+        run: |
+          VERSION=$(grep -m1 '^version' pyproject.toml | cut -d\" -f2)
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
 
       - name: Send status to Slack
-        if: always()
         uses: slackapi/slack-github-action@v2.0.0
         with:
           webhook: ${{ secrets.PACKAGE_RELEASE_SLACK_WEBHOOK_URL }}
@@ -51,7 +87,7 @@ jobs:
           payload: |
             {
               "status": "${{ job.status }}",
-              "package": "agents-arcade",
+              "package": "google-adk-arcade",
               "version": "${{ env.VERSION }}",
               "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
             }
