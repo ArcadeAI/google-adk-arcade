@@ -34,42 +34,82 @@ pip install google-adk-arcade
 ## Basic Usage
 
 ```python
-from agents import Agent, RunConfig, Runner
-from arcadepy import AsyncArcade
+import asyncio
 
-from agents_arcade import get_arcade_tools
+from arcadepy import AsyncArcade
+from dotenv import load_dotenv
+from google.adk import Agent, Runner
+from google.adk.artifacts import InMemoryArtifactService
+from google.adk.sessions import InMemorySessionService
+from google.genai import types
+
+from google_adk_arcade.tools import get_arcade_tools
+
+load_dotenv(override=True)
 
 
 async def main():
+    app_name = 'my_app'
+    user_id = 'mateo@arcade.dev'
+    session_service = InMemorySessionService()
+    artifact_service = InMemoryArtifactService()
     client = AsyncArcade()
-    tools = await get_arcade_tools(client, ["google"])
+
+    google_tools = await get_arcade_tools(client, tools=["Google.ListEmails"])
+
+    # authorize the tools
+    for tool in google_tools:
+        result = await client.tools.authorize(
+            tool_name=tool.name,
+            user_id=user_id
+        )
+        if result.status != "completed":
+            print(f"Click this link to authorize {tool.name}:\n{result.url}")
+        await client.auth.wait_for_completion(result)
 
     google_agent = Agent(
-        name="Google agent",
-        instructions="You are a helpful assistant that can assist with Google API calls.",
-        model="gpt-4o-mini",
-        tools=tools,
+        model="gemini-2.0-flash",
+        name="google_tool_agent",
+        instruction="I can use Google tools to manage an inbox!",
+        description="An agent equipped with tools to read Gmail emails. "
+                    "Make sure to call google_listemails to read and summarize"
+                    " emails",
+        tools=google_tools,
+    )
+    session = await session_service.create_session(
+        app_name=app_name, user_id=user_id, state={
+            "user_id": user_id,
+        }
+    )
+    runner = Runner(
+        app_name=app_name,
+        agent=google_agent,
+        artifact_service=artifact_service,
+        session_service=session_service,
     )
 
-    result = await Runner.run(
-        starting_agent=google_agent,
-        input="What are my latest emails?",
-        context={"user_id": "user@example.com"},
+    user_input = "summarize my latest 3 emails"
+    content = types.Content(
+        role='user', parts=[types.Part.from_text(text=user_input)]
     )
-    print("Final output:\n\n", result.final_output)
+    for event in runner.run(
+        user_id=user_id,
+        session_id=session.id,
+        new_message=content,
+    ):
+        if event.content.parts and event.content.parts[0].text:
+            print(f'** {event.author}: {event.content.parts[0].text}')
 
-
-if __name__ == "__main__":
-    import asyncio
-
+if __name__ == '__main__':
     asyncio.run(main())
+
 ```
 
 ## Key Features
 
--   **Easy Integration**: Simple API (one function) to connect Arcade tools with OpenAI Agents
+-   **Easy Integration**: Simple API (one function) to connect Arcade tools with Google ADK
 -   **Extensive Toolkit Support**: Access to all Arcade toolkits including Gmail, Google Drive, Search, and more
--   **Asynchronous Support**: Built with async/await for compatibility with OpenAI's Agent framework
+-   **Asynchronous Support**: Built with async/await for compatibility with Google ADK
 -   **Authentication Handling**: Manages authorization for tools requiring user permissions like Google, LinkedIn, etc
 
 ## Available Toolkits
