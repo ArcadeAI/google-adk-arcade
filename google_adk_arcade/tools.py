@@ -38,7 +38,15 @@ async def _async_invoke_arcade_tool(
     client: AsyncArcade,
 ) -> dict:
     if requires_auth:
-        await _authorize_tool(client, tool_context, tool_name)
+        try:
+            await _authorize_tool(client, tool_context, tool_name)
+        except AuthorizationError as e:
+            # TODO: raise the exception once ADK does proper error handling
+            # https://github.com/google/adk-python/issues/503
+            return (
+                f"Authorization required for tool {tool_name}, "
+                f"please authorize here: {e.result.url} \nThen try again."
+            )
 
     result = await client.tools.execute(
         tool_name=tool_name,
@@ -78,7 +86,7 @@ class ArcadeTool(FunctionTool):
         schema = schema.model_json_schema()
         _map_pydantic_type_to_property_schema(schema)
         self.schema = schema
-        self.name = name
+        self.name = name.replace(".", "_")
         self.description = description
         self.client = client
         self.requires_auth = requires_auth
