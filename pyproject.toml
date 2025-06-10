@@ -1,6 +1,6 @@
 [project]
 name = "google-adk-arcade"
-version = "0.0.2"
+version = "0.0.3"
 description = "Arcade Integration for Google ADK"
 readme = "README.md"
 requires-python = ">=3.10"
